@@ -1,0 +1,13 @@
+{
+  "name": "biz-english-4000",
+  "version": "1.0.0",
+  "description": "以通訊電信產業為主的商務英文單字卡網頁 App，介面為繁體中文（台灣用語），手機直式優先。純靜態檔案、原生 JavaScript，不需要任何建置工具或套件。",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
