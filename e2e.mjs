@@ -13,7 +13,7 @@ const due0=await p.evaluate(()=>__app.dueIds().length);
 await p.evaluate(()=>__app.setToday('2099-01-02')); const due1=await p.evaluate(()=>__app.dueIds().length);
 console.log('due today',due0,'due future',due1);
 await p.goto(U+'#/'); await p.waitForTimeout(300); await s('06-dashboard');
-await p.goto(U+'#/search'); await p.waitForTimeout(300); const inp=p.locator('input').first(); if(await inp.count()){await inp.fill('roaming'); await p.waitForTimeout(400);} await s('07-search');
+await p.goto(U+'#/browse'); await p.waitForTimeout(300); const inp=p.locator('input').first(); if(await inp.count()){await inp.fill('roaming'); await p.waitForTimeout(400);} await s('07-search');
 await p.goto(U+'#/quiz'); await p.waitForTimeout(400); await s('08-quiz');
 await p.goto(U+'#/settings'); await p.waitForTimeout(300); await s('09-settings');
 await p.goto(U+'#/about'); await p.waitForTimeout(300); await s('10-about');

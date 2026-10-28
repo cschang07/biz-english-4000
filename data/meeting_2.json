@@ -151,7 +151,7 @@
 {"id":"mtg-0350","en":"interpreter","pos":"n.","zh":"口譯員","ipa":"/ɪnˈtɜːrprɪtər/","example_en":"We'll need an interpreter for the Osaka meeting.","example_zh":"大阪的會議我們需要一位口譯員。","category":"meeting","level":2},
 {"id":"mtg-0351","en":"poll","pos":"n.","zh":"（線上）投票；意見調查","ipa":"/poʊl/","example_en":"Let's run a quick poll to pick a date.","example_zh":"我們做個快速投票來選日期。","category":"meeting","level":2},
 {"id":"mtg-0352","en":"take notes","pos":"phr.","zh":"做筆記","ipa":"/ˈteɪk ˈnoʊts/","example_en":"Who will take notes for this meeting?","example_zh":"這場會議由誰做筆記？","category":"meeting","level":1},
-{"id":"mtg-0353","en":"decision log","pos":"n.","zh":"決議紀錄","ipa":"/dɪˈsɪʒən lɔːɡ/","example_en":"Add today's decisions to the decision log.","example_zh":"把今天的決議加到決議紀錄裡。","category":"meeting","level":2},
+{"id":"mtg-0353","en":"decision log","pos":"n.","zh":"決議紀錄；決策紀錄","ipa":"/dɪˈsɪʒən lɔːɡ/","example_en":"Add today's decisions to the decision log.","example_zh":"把今天的決議加到決議紀錄裡。","category":"meeting","level":2},
 {"id":"mtg-0354","en":"behind schedule","pos":"phr.","zh":"進度落後","ipa":"/bɪˈhaɪnd ˈskɛdʒuːl/","example_en":"The installation is two weeks behind schedule.","example_zh":"安裝進度落後兩週。","category":"meeting","level":1},
 {"id":"mtg-0355","en":"ahead of schedule","pos":"phr.","zh":"進度超前","ipa":"/əˈhɛd əv ˈskɛdʒuːl/","example_en":"We finished the testing ahead of schedule.","example_zh":"我們提前完成了測試。","category":"meeting","level":2},
 {"id":"mtg-0356","en":"carry over","pos":"v.","zh":"延到下次（處理）","ipa":"/ˌkæri ˈoʊvər/","example_en":"Let's carry over the last item to next week.","example_zh":"最後一項我們延到下週再討論。","category":"meeting","level":2},
