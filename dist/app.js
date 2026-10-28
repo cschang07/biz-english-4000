@@ -18,6 +18,9 @@
   ];
   const CAT = Object.fromEntries(CATS.map((c, i) => [c.key, { ...c, order: i }]));
   const LEVEL_ZH = { 1: '基礎', 2: '中級', 3: '進階' };
+  const CARD_ID_RE = /^(?:tel|net|cus|con|mtg|eml|prj|fin|cor)-\d{4}$/;
+  const MAX_EF = 4;
+  const MAX_IV = 36500;
 
   // SM-2 品質分數：忘記 < 3 視為答錯
   const GRADES = [
@@ -69,9 +72,10 @@
     return `${d.getUTCMonth() + 1} 月 ${d.getUTCDate()} 日 週${'日一二三四五六'[d.getUTCDay()]}`;
   };
   const fmtIv = days => {
-    if (days < 30) return `${days} 天`;
-    if (days < 365) return `${Math.round(days / 3) / 10} 個月`;
-    return `${Math.round(days / 36.5) / 10} 年`;
+    const n = Number(days);
+    if (!Number.isFinite(n) || n < 30) return `${Math.max(0, Math.round(Number.isFinite(n) ? n : 0))} 天`;
+    if (n < 365) return `${Math.round(n / 3) / 10} 個月`;
+    return `${Math.round(n / 36.5) / 10} 年`;
   };
 
   const ICON = {
@@ -89,19 +93,85 @@
 
   /* ---------- 儲存 ---------- */
   function freshState() {
-    return { version: 1, settings: { ...DEFAULT_SETTINGS }, cards: {}, days: {} };
+    return {
+      version: 1,
+      settings: { ...DEFAULT_SETTINGS, cats: DEFAULT_SETTINGS.cats.slice() },
+      cards: Object.create(null),
+      days: Object.create(null),
+    };
+  }
+  function plainObject(v) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+    return v;
+  }
+  function sanitizeCard(id, raw) {
+    if (!CARD_ID_RE.test(id) || !plainObject(raw)) return null;
+    const ef = Number(raw.ef);
+    const n = Number(raw.n);
+    const iv = Number(raw.iv);
+    if (!Number.isFinite(ef) || !Number.isFinite(n) || !Number.isFinite(iv)) return null;
+    if (typeof raw.due !== 'string' || !isValidYMD(raw.due)) return null;
+    const last = typeof raw.last === 'string' && isValidYMD(raw.last) ? raw.last : raw.due;
+    const first = typeof raw.first === 'string' && isValidYMD(raw.first) ? raw.first : last;
+    const lapses = Number(raw.lapses);
+    return {
+      ef: clamp(Math.round(ef * 1000) / 1000, 1.3, MAX_EF),
+      n: clamp(Math.round(n), 0, 10000),
+      iv: clamp(Math.round(iv), 0, MAX_IV),
+      lapses: clamp(Number.isFinite(lapses) ? Math.round(lapses) : 0, 0, 100000),
+      due: raw.due,
+      last,
+      first,
+    };
   }
   function normalizeState(raw) {
     const s = freshState();
-    if (!raw || typeof raw !== 'object') return s;
-    if (raw.settings && typeof raw.settings === 'object') Object.assign(s.settings, raw.settings);
-    if (raw.cards && typeof raw.cards === 'object') s.cards = raw.cards;
-    if (raw.days && typeof raw.days === 'object') s.days = raw.days;
-    s.settings.dailyNew = clamp(Number(s.settings.dailyNew) || 20, 1, 200);
-    s.settings.rate = clamp(Number(s.settings.rate) || 0.9, 0.5, 1.5);
-    if (!Array.isArray(s.settings.cats)) s.settings.cats = ['telecom'];
-    s.settings.cats = s.settings.cats.filter(k => CAT[k]);
-    if (!['auto', 'light', 'dark'].includes(s.settings.theme)) s.settings.theme = 'auto';
+    if (!plainObject(raw)) return s;
+    const rawS = plainObject(raw.settings);
+    if (rawS) {
+      if (rawS.onboarded === true) s.settings.onboarded = true;
+      if (rawS.autoSpeak === true) s.settings.autoSpeak = true;
+      const daily = Number(rawS.dailyNew);
+      s.settings.dailyNew = clamp(Number.isFinite(daily) && daily > 0 ? daily : 20, 5, 100);
+      const rate = Number(rawS.rate);
+      s.settings.rate = clamp(Number.isFinite(rate) ? rate : 0.9, 0.5, 1.3);
+      if (Array.isArray(rawS.cats)) {
+        const cats = [];
+        for (const k of rawS.cats) {
+          if (typeof k === 'string' && CAT[k] && !cats.includes(k)) cats.push(k);
+        }
+        if (cats.length) s.settings.cats = CATS.map(c => c.key).filter(k => cats.includes(k));
+      }
+      if (rawS.theme === 'auto' || rawS.theme === 'light' || rawS.theme === 'dark') s.settings.theme = rawS.theme;
+    }
+    const rawCards = plainObject(raw.cards);
+    if (rawCards) {
+      let n = 0;
+      for (const id of Object.keys(rawCards)) {
+        if (n >= 8000) break;
+        const card = sanitizeCard(id, rawCards[id]);
+        if (!card) continue;
+        s.cards[id] = card;
+        n++;
+      }
+    }
+    const rawDays = plainObject(raw.days);
+    if (rawDays) {
+      let n = 0;
+      for (const k of Object.keys(rawDays)) {
+        if (n >= 5000) break;
+        if (!isValidYMD(k)) continue;
+        const d = rawDays[k];
+        if (!plainObject(d)) continue;
+        const nw = Number(d.new);
+        const rv = Number(d.rev);
+        s.days[k] = {
+          new: clamp(Number.isFinite(nw) ? Math.round(nw) : 0, 0, 100000),
+          rev: clamp(Number.isFinite(rv) ? Math.round(rv) : 0, 0, 100000),
+        };
+        n++;
+      }
+    }
     return s;
   }
   function loadState() {
@@ -140,10 +210,21 @@
   // 原版 SM-2：答錯（q<3）重設次數、不改易度；答對依 EF 拉長間隔。
   // 微調：「困難」間隔成長較慢、「簡單」較快，讓四個按鈕有實際差別。
   function schedule(prev, gradeKey, day = today()) {
-    const q = GRADE[gradeKey].q;
-    const c = prev ? { ...prev } : { ef: 2.5, n: 0, iv: 0, lapses: 0, first: day };
+    const g = GRADE[gradeKey];
+    if (!g || !isValidYMD(day)) throw new Error('schedule: 評分或日期無效');
+    const q = g.q;
+    const priorN = prev && Number.isFinite(Number(prev.n)) ? Math.round(Number(prev.n)) : 0;
+    const c = {
+      ef: prev && Number.isFinite(Number(prev.ef)) ? Number(prev.ef) : 2.5,
+      n: Math.max(0, priorN),
+      iv: prev && Number.isFinite(Number(prev.iv)) ? Number(prev.iv) : 0,
+      lapses: prev && Number.isFinite(Number(prev.lapses)) ? Math.round(Number(prev.lapses)) : 0,
+      first: prev && typeof prev.first === 'string' && isValidYMD(prev.first) ? prev.first : day,
+    };
+    if (c.ef < 1.3 || c.ef > MAX_EF) c.ef = 2.5;
+    if (c.iv < 0) c.iv = 0;
     if (q < 3) {
-      if (prev && prev.n > 0) c.lapses = (c.lapses || 0) + 1;
+      if (prev && c.n > 0) c.lapses += 1;
       c.n = 0;
       c.iv = 1;
     } else {
@@ -153,10 +234,13 @@
       else if (gradeKey === 'hard') iv = Math.max(c.iv + 1, c.iv * 1.2);
       else if (gradeKey === 'easy') iv = c.iv * c.ef * 1.3;
       else iv = c.iv * c.ef;
-      c.ef = Math.max(1.3, +(c.ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))).toFixed(3));
-      c.iv = Math.max(1, Math.round(iv));
+      const delta = 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02);
+      const ef = c.ef + delta;
+      c.ef = clamp(Math.round((Number.isFinite(ef) ? ef : 2.5) * 1000) / 1000, 1.3, MAX_EF);
+      c.iv = clamp(Math.round(Number.isFinite(iv) ? iv : 1), 1, MAX_IV);
       c.n += 1;
     }
+    c.lapses = clamp(c.lapses, 0, 100000);
     c.due = addDays(day, c.iv);
     c.last = day;
     return c;
@@ -165,22 +249,26 @@
   const statusOf = id => {
     const c = state.cards[id];
     if (!c) return 'new';
-    return c.iv >= MASTERED_DAYS ? 'mastered' : 'learning';
+    return Number(c.iv) >= MASTERED_DAYS ? 'mastered' : 'learning';
   };
   const STATUS_ZH = { new: '未學', learning: '學習中', mastered: '熟練' };
 
   function dayStat(d = today()) { return state.days[d] || { new: 0, rev: 0 }; }
   function bumpDay(kind) {
     const t = today();
-    const d = state.days[t] || (state.days[t] = { new: 0, rev: 0 });
-    d[kind]++;
+    let d = state.days[t];
+    if (!d || typeof d !== 'object') d = state.days[t] = { new: 0, rev: 0 };
+    d[kind] = (Number(d[kind]) || 0) + 1;
   }
-  const active = d => { const s = state.days[d]; return !!s && (s.new + s.rev) > 0; };
+  const active = d => {
+    const s = state.days[d];
+    return !!s && ((Number(s.new) || 0) + (Number(s.rev) || 0)) > 0;
+  };
   function streak() {
     let d = today();
     if (!active(d)) d = addDays(d, -1);
     let n = 0;
-    while (active(d)) { n++; d = addDays(d, -1); }
+    while (active(d) && n < 10000) { n++; d = addDays(d, -1); }
     return n;
   }
 
@@ -188,7 +276,10 @@
   function dueIds() {
     const t = today();
     return Object.keys(state.cards)
-      .filter(id => BY_ID.has(id) && state.cards[id].due <= t)
+      .filter(id => {
+        const c = state.cards[id];
+        return BY_ID.has(id) && c && typeof c.due === 'string' && c.due <= t;
+      })
       .sort((a, b) => state.cards[a].due.localeCompare(state.cards[b].due));
   }
   function availableNew(limit) {
@@ -225,15 +316,41 @@
     },
     speak(text) {
       if (!this.ok) { toast('此瀏覽器不支援語音朗讀'); return; }
+      const utter = String(text || '').trim();
+      if (!utter) return;
+      const run = () => {
+        try {
+          const u = new SpeechSynthesisUtterance(utter);
+          u.lang = 'en-US';
+          u.rate = Number(state.settings.rate) || 0.9;
+          if (!this.voice) this.pick();
+          if (this.voice) u.voice = this.voice;
+          let kick;
+          const stopKick = () => { if (kick) clearInterval(kick); kick = null; };
+          // iOS 會在朗讀約十餘秒後暫停，需週期性 resume
+          u.onstart = () => {
+            try { speechSynthesis.resume(); } catch (e) {}
+            kick = setInterval(() => {
+              if (!speechSynthesis.speaking) { stopKick(); return; }
+              try { speechSynthesis.resume(); } catch (e) {}
+            }, 4000);
+          };
+          u.onend = stopKick;
+          u.onerror = e => {
+            stopKick();
+            const code = e && e.error;
+            if (code === 'interrupted' || code === 'canceled' || code === 'not-allowed') return;
+            toast('語音播放失敗');
+          };
+          speechSynthesis.speak(u);
+        } catch (e) { toast('語音播放失敗'); }
+      };
       try {
-        speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'en-US';
-        u.rate = state.settings.rate;
-        if (!this.voice) this.pick();
-        if (this.voice) u.voice = this.voice;
-        u.onerror = e => { if (e.error !== 'interrupted' && e.error !== 'canceled') toast('語音播放失敗'); };
-        speechSynthesis.speak(u);
+        // iOS 在同一個回合先 cancel 再 speak 會把這句丟掉
+        if (speechSynthesis.speaking || speechSynthesis.pending) {
+          speechSynthesis.cancel();
+          setTimeout(run, 50);
+        } else run();
       } catch (e) { toast('語音播放失敗'); }
     },
   };
@@ -257,7 +374,8 @@
     $('#themeBtn').innerHTML = eff === 'dark' ? ICON.sun : ICON.moon;
     $('#themeBtn').setAttribute('aria-label', eff === 'dark' ? '切換為淺色' : '切換為深色');
   }
-  prefersDark.addEventListener?.('change', applyTheme);
+  if (prefersDark.addEventListener) prefersDark.addEventListener('change', applyTheme);
+  else if (prefersDark.addListener) prefersDark.addListener(applyTheme);
 
   /* ---------- Toast / 對話框 ---------- */
   let toastTimer;
@@ -397,6 +515,7 @@
     } else set.add(key);
     state.settings.cats = CATS.map(c => c.key).filter(k => set.has(k));
     session = null;
+    quiz = null;
     save();
     return true;
   }
@@ -508,10 +627,10 @@
   function renderStudy() {
     if (!session || session.date !== today()) buildSession();
     const s = session;
+    while (s.pos < s.queue.length && !BY_ID.has(s.queue[s.pos].id)) s.pos++;
     if (s.pos >= s.queue.length) return renderStudyDone();
     const item = s.queue[s.pos];
     const w = BY_ID.get(item.id);
-    if (!w) { s.pos++; return renderStudy(); }
     const card = state.cards[w.id];
     const isNew = !card;
     const pct = (s.pos / s.queue.length) * 100;
@@ -672,7 +791,13 @@
       if (pool.length < 4) pool = DATA.map(w => w.id);
     }
     if (DATA.length < 4) { quiz = null; return; }
-    const qs = shuffle(pool).slice(0, QUIZ_LEN).map(makeQuestion);
+    const qs = [];
+    for (const id of shuffle(pool)) {
+      if (qs.length >= QUIZ_LEN) break;
+      const q = makeQuestion(id);
+      if (q) qs.push(q);
+    }
+    if (qs.length < 1) { quiz = null; return; }
     quiz = { qs, i: 0, score: 0, picked: null, wrong: [], fromLearned };
   }
   function makeQuestion(id) {
@@ -692,6 +817,7 @@
     };
     tryAdd(shuffle(DATA.filter(x => x.category === w.category)));
     tryAdd(shuffle(DATA));
+    if (picks.length < 3) return null;
     return { id, dir, options: shuffle([id, ...picks]) };
   }
 
@@ -710,6 +836,7 @@
       : `<div class="zhp">${esc(w.zh)}</div>`;
     const opts = q.options.map((oid, i) => {
       const o = BY_ID.get(oid);
+      if (!o) return '';
       let cls = '';
       if (answered) {
         if (oid === q.id) cls = ' correct';
@@ -942,15 +1069,30 @@
       cards: state.cards,
       days: state.days,
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const name = `biz-english-4000-progress-${today()}.json`;
+    const json = JSON.stringify(payload, null, 2);
+    // iOS 主畫面與 Safari 常常忽略 <a download>，能分享檔案時改走系統分享
+    try {
+      const file = new File([json], name, { type: 'application/json' });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: '商用英文 4000 進度' })
+          .then(() => toast('已匯出進度檔'))
+          .catch(err => { if (!err || err.name !== 'AbortError') downloadProgress(json, name); });
+        return;
+      }
+    } catch (e) { /* 改走下載 */ }
+    downloadProgress(json, name);
+  }
+  function downloadProgress(json, name) {
+    const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `biz-english-4000-progress-${today()}.json`;
+    a.download = name;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
     toast('已匯出進度檔');
   }
 
@@ -958,18 +1100,30 @@
     const file = e.target.files && e.target.files[0];
     e.target.value = '';
     if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast('檔案太大（上限 2 MB）'); return; }
     let obj;
     try { obj = JSON.parse(await file.text()); }
     catch (err) { toast('檔案不是有效的 JSON'); return; }
-    if (!obj || typeof obj !== 'object' || typeof obj.cards !== 'object' || obj.cards === null || Array.isArray(obj.cards)) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj) || typeof obj.cards !== 'object' || obj.cards === null || Array.isArray(obj.cards)) {
       toast('這不是本 App 匯出的進度檔');
       return;
     }
-    const n = Object.keys(obj.cards).length;
-    const ok = await confirmBox({ title: '匯入進度？', body: `檔案內有 ${n} 個已學單字的紀錄，會取代目前裝置上的所有進度。`, ok: '匯入並取代' });
+    if (obj.app != null && obj.app !== 'biz-english-4000') {
+      toast('這不是本 App 匯出的進度檔');
+      return;
+    }
+    const rawN = Object.keys(obj.cards).length;
+    const next = normalizeState(obj);
+    const n = Object.keys(next.cards).length;
+    if (rawN > 0 && n === 0) { toast('進度檔裡沒有可用的學習紀錄'); return; }
+    const dropped = rawN - n;
+    const body = dropped > 0
+      ? `檔案內有 ${rawN} 筆紀錄，其中 ${n} 筆格式正確，會取代目前裝置上的所有進度。其餘 ${dropped} 筆格式不符，會略過。`
+      : `檔案內有 ${n} 個已學單字的紀錄，會取代目前裝置上的所有進度。`;
+    const ok = await confirmBox({ title: '匯入進度？', body, ok: '匯入並取代' });
     if (!ok) return;
-    state = normalizeState(obj);
-    state.settings.onboarded = true;
+    next.settings.onboarded = true;
+    state = next;
     save();
     session = null;
     quiz = null;
@@ -1167,7 +1321,7 @@
 
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
     });
   }
 })();

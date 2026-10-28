@@ -26,7 +26,7 @@
 {"id":"mtg-0025","en":"plenary session","pos":"n.","zh":"全體會議","ipa":"/ˈpliːnəri ˈsɛʃən/","example_en":"The keynote speech opens the plenary session.","example_zh":"全體會議由主題演講揭開序幕。","category":"meeting","level":3},
 {"id":"mtg-0026","en":"run over","pos":"phr. v.","zh":"超時","ipa":"/rʌn ˈoʊvər/","example_en":"Sorry I'm late, the previous meeting ran over.","example_zh":"抱歉我遲到了，上一場會議超時了。","category":"meeting","level":2},
 {"id":"mtg-0027","en":"running short on time","pos":"phr.","zh":"時間不太夠了","ipa":"/ˈrʌnɪŋ ʃɔːrt ɑːn taɪm/","example_en":"We're running short on time, so let's be brief.","example_zh":"我們時間不太夠了，大家簡短一點。","category":"meeting","level":2},
-{"id":"mtg-0028","en":"head count","pos":"n.","zh":"出席人數","ipa":"/ˈhɛd kaʊnt/","example_en":"What's the head count for tomorrow's training?","example_zh":"明天訓練課程的出席人數是多少？","category":"meeting","level":2},
+{"id":"mtg-0028","en":"head count","pos":"n.","zh":"出席人數","ipa":"/ˈhɛd kaʊnt/","example_en":"What's the head count for tomorrow's training?","example_zh":"明天訓練課程的出席人數是多少？","category":"meeting","level":2,"note":"指出席人數，跟人事 headcount（編制人數）不同。"},
 {"id":"mtg-0029","en":"chairperson","pos":"n.","zh":"會議主席","ipa":"/ˈtʃɛrpɜːrsən/","example_en":"The chairperson opened the meeting at nine sharp.","example_zh":"主席在九點整宣布會議開始。","category":"meeting","level":2},
 {"id":"mtg-0030","en":"chair","pos":"v.","zh":"主持（會議）","ipa":"/tʃɛr/","example_en":"Ms. Lin will chair today's budget meeting.","example_zh":"林小姐將主持今天的預算會議。","category":"meeting","level":2},
 {"id":"mtg-0031","en":"facilitator","pos":"n.","zh":"引導者；會議引導人","ipa":"/fəˈsɪlɪteɪtər/","example_en":"The facilitator kept the discussion focused.","example_zh":"引導人讓討論保持聚焦。","category":"meeting","level":3},

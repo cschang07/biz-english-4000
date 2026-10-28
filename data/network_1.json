@@ -188,7 +188,7 @@
 {"id":"net-0187","en":"change request","pos":"n.","zh":"變更申請","ipa":"/ˈtʃeɪndʒ rɪˌkwɛst/","example_en":"Submit a change request before modifying the firewall.","example_zh":"修改防火牆設定前請先提出變更申請。","category":"network","level":2},
 {"id":"net-0188","en":"infrastructure","pos":"n.","zh":"基礎架構","ipa":"/ˈɪnfrəˌstrʌktʃər/","example_en":"We are investing in new IT infrastructure.","example_zh":"我們正在投資新的資訊基礎架構。","category":"network","level":2},
 {"id":"net-0189","en":"staging","pos":"n.","zh":"預備環境；上線前測試環境","ipa":"/ˈsteɪdʒɪŋ/","example_en":"The fix is on staging now.","example_zh":"修正版目前在預備環境上。","category":"network","level":3},
-{"id":"net-0190","en":"go live","pos":"phr. v.","zh":"正式上線","ipa":"/ɡoʊ laɪv/","example_en":"The new booking system goes live on Monday.","example_zh":"新的訂位系統週一正式上線。","category":"network","level":2},
+{"id":"net-0190","en":"go live","pos":"phr. v.","zh":"正式上線（動詞）","ipa":"/ɡoʊ laɪv/","example_en":"The new booking system goes live on Monday.","example_zh":"新的訂位系統週一正式上線。","category":"network","level":2},
 {"id":"net-0191","en":"cutover","pos":"n.","zh":"系統切換","ipa":"/ˈkʌtoʊvər/","example_en":"The cutover to the new system will take one weekend.","example_zh":"切換到新系統需要一個週末。","category":"network","level":3},
 {"id":"net-0192","en":"database","pos":"n.","zh":"資料庫","ipa":"/ˈdeɪtəbeɪs/","example_en":"Customer records are kept in the database.","example_zh":"客戶紀錄保存在資料庫中。","category":"network","level":1},
 {"id":"net-0193","en":"query","pos":"n.","zh":"查詢","ipa":"/ˈkwɪri/","example_en":"This query takes too long to run.","example_zh":"這個查詢執行太久了。","category":"network","level":2},
