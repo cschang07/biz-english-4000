@@ -678,3 +678,6 @@ body.no-tabbar .toast.show { transform: translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+.nick-input{width:100%;font:inherit;font-size:18px;padding:14px 16px;border-radius:14px;border:1.5px solid var(--border);background:var(--surface);color:inherit;box-sizing:border-box}
+.nick-input:focus{outline:none;border-color:var(--accent)}

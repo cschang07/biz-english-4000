@@ -95,6 +95,8 @@
   function freshState() {
     return {
       version: 1,
+      nickname: '',
+      settingsAt: 0,
       settings: { ...DEFAULT_SETTINGS, cats: DEFAULT_SETTINGS.cats.slice() },
       cards: Object.create(null),
       days: Object.create(null),
@@ -124,9 +126,13 @@
       first,
     };
   }
+  const cleanNick = v => String(v || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 20);
   function normalizeState(raw) {
     const s = freshState();
     if (!plainObject(raw)) return s;
+    if (typeof raw.nickname === 'string') s.nickname = cleanNick(raw.nickname);
+    const sat = Number(raw.settingsAt);
+    if (Number.isFinite(sat) && sat > 0) s.settingsAt = sat;
     const rawS = plainObject(raw.settings);
     if (rawS) {
       if (rawS.onboarded === true) s.settings.onboarded = true;
@@ -179,9 +185,11 @@
     catch (e) { return freshState(); }
   }
   let state = loadState();
-  function save() {
+  function save(settingsChanged = false) {
+    if (settingsChanged) state.settingsAt = Date.now();
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
     catch (e) { toast('無法儲存進度（儲存空間不足或被瀏覽器封鎖）'); }
+    try { window.__sync && window.__sync.schedule(); } catch (e) {}
   }
 
   /* ---------- 資料 ---------- */
@@ -446,6 +454,7 @@
   function render() {
     if (!DATA.length && !loadError) return;
     if (loadError) return renderError();
+    if (!state.nickname) return renderNickname();
     if (!state.settings.onboarded) return renderOnboarding();
     const r = route();
     const map = { home: renderHome, study: renderStudy, quiz: renderQuiz, browse: renderBrowse, settings: renderSettings, about: renderAbout };
@@ -454,6 +463,82 @@
   function paint(html, tab, hideTabbar = false) {
     setChrome(tab, hideTabbar);
     view().innerHTML = html;
+  }
+
+  /* ---------- 暱稱 ---------- */
+  function renderNickname() {
+    paint(`
+      <div class="onboard">
+        <div class="welcome-art" aria-hidden="true"><div class="c c1 en">Hi!</div><div class="c c2 en">hello</div><div class="c c3 en">こんにちは</div></div>
+        <h1>嗨！該怎麼稱呼你？</h1>
+        <p class="lead">取一個暱稱吧，之後會用它跟你打招呼。隨時可以在「設定」修改。</p>
+        <div class="body">
+          <input id="nickInput" class="nick-input" type="text" maxlength="20" autocomplete="nickname" placeholder="例如：小美" value="${esc(state.nickname)}" aria-label="暱稱">
+        </div>
+        <div class="foot"><button class="btn primary" type="button" data-act="nick-save">就叫這個</button></div>
+      </div>`, '', true);
+    const inp = $('#nickInput');
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); actions['nick-save'](); } });
+    setTimeout(() => inp.focus(), 50);
+  }
+  function editNickname() {
+    const root = $('#modal');
+    root.innerHTML = `
+      <div class="modal-backdrop">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="nTitle">
+          <h3 id="nTitle">修改暱稱</h3>
+          <input id="nickEdit" class="nick-input" type="text" maxlength="20" value="${esc(state.nickname)}" aria-label="暱稱">
+          <div class="row" style="margin-top:14px">
+            <button class="btn ghost" type="button" data-n="0">取消</button>
+            <button class="btn primary" type="button" data-n="1">儲存</button>
+          </div>
+        </div>
+      </div>`;
+    const inp = $('#nickEdit');
+    const done = ok => {
+      if (ok) {
+        const v = cleanNick(inp.value);
+        if (!v) { toast('請輸入暱稱'); return; }
+        state.nickname = v;
+        save(true);
+        toast('暱稱已更新');
+      }
+      root.innerHTML = '';
+      render();
+    };
+    root.querySelector('[data-n="0"]').onclick = () => done(false);
+    root.querySelector('[data-n="1"]').onclick = () => done(true);
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); });
+    inp.focus();
+  }
+
+  /* ---------- 雲端同步（設定頁區塊） ---------- */
+  function syncSection() {
+    const sy = window.__sync;
+    let inner;
+    if (!sy || sy.status === 'unconfigured') {
+      inner = `<p class="muted" style="font-size:14px">雲端同步尚未設定，目前進度只存在這台裝置。</p>`;
+    } else if (sy.status === 'loading') {
+      inner = `<p class="muted" style="font-size:14px">連線中…</p>`;
+    } else if (sy.status === 'error') {
+      inner = `<p class="muted" style="font-size:14px">${esc(sy.message)}</p>`;
+    } else if (sy.status === 'signedOut') {
+      inner = `
+        <p class="muted" style="font-size:14px">登入 Google 後，進度會自動備份到雲端，換手機也能接著背。</p>
+        <button class="btn primary block" type="button" data-act="sync-in" style="margin-top:12px">用 Google 登入</button>
+        ${sy.message ? `<p class="muted" style="font-size:13px;margin-top:8px">${esc(sy.message)}</p>` : ''}`;
+    } else {
+      const t = sy.lastSync ? new Date(sy.lastSync) : null;
+      const ts = t ? `${t.getMonth() + 1}/${t.getDate()} ${pad(t.getHours())}:${pad(t.getMinutes())}` : '尚未同步';
+      inner = `
+        <div class="setting" style="padding:0 0 10px"><div><div class="label en">${esc(sy.email)}</div><div class="desc">上次同步：${sy.busy ? '同步中…' : ts}</div></div></div>
+        ${sy.message ? `<p class="muted" style="font-size:13px">${esc(sy.message)}</p>` : ''}
+        <div class="row">
+          <button class="btn grow" type="button" data-act="sync-now">立即同步</button>
+          <button class="btn ghost grow" type="button" data-act="sync-out">登出</button>
+        </div>`;
+    }
+    return `<div class="section"><div class="section-title"><span>雲端同步</span></div><div class="panel" id="syncPanel">${inner}</div></div>`;
   }
 
   /* ---------- 引導 ---------- */
@@ -516,7 +601,7 @@
     state.settings.cats = CATS.map(c => c.key).filter(k => set.has(k));
     session = null;
     quiz = null;
-    save();
+    save(true);
     return true;
   }
 
@@ -556,7 +641,7 @@
 
     paint(`
       <div class="greet">
-        <h1>${hello} 👋</h1>
+        <h1>${hello}，${esc(state.nickname)} 👋</h1>
         <p>${fmtDateZh(today())}${todayOverride ? '（模擬日期）' : ''}</p>
       </div>
 
@@ -993,6 +1078,17 @@
       `<button type="button" class="${cur === v ? 'on' : ''}" data-act="${act}" data-v="${v}" aria-pressed="${cur === v}">${l}</button>`).join('')}</div>`;
     paint(`
       <div class="section" style="margin-top:8px">
+        <div class="section-title"><span>個人</span></div>
+        <div class="panel list">
+          <button class="setting" type="button" data-act="nick-edit" style="width:100%;background:none;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer">
+            <span class="label">暱稱</span><span class="muted">${esc(state.nickname)} ›</span>
+          </button>
+        </div>
+      </div>
+
+      ${syncSection()}
+
+      <div class="section">
         <div class="section-title"><span>學習目標</span></div>
         <div class="panel list">
           <div class="setting">
@@ -1036,7 +1132,7 @@
       <div class="section">
         <div class="section-title"><span>學習紀錄</span></div>
         <div class="panel">
-          <p class="muted" style="font-size:14px">進度只存在這台裝置的瀏覽器中。換手機或清除瀏覽資料前，請先匯出備份。</p>
+          <p class="muted" style="font-size:14px">進度存在這台裝置的瀏覽器中（登入雲端同步後也會備份到雲端）。換手機或清除瀏覽資料前，可先匯出備份。</p>
           <div class="row" style="margin-top:14px">
             <button class="btn grow" type="button" data-act="export">匯出進度</button>
             <button class="btn grow" type="button" data-act="import">匯入進度</button>
@@ -1056,7 +1152,7 @@
 
     const rate = $('#rate');
     rate.addEventListener('input', () => { $('#rateOut').textContent = `${Number(rate.value).toFixed(1)}×`; });
-    rate.addEventListener('change', () => { state.settings.rate = Number(rate.value); save(); });
+    rate.addEventListener('change', () => { state.settings.rate = Number(rate.value); save(true); });
     $('#importFile').addEventListener('change', onImportFile);
   }
 
@@ -1065,6 +1161,8 @@
       app: 'biz-english-4000',
       version: state.version,
       exportedAt: new Date().toISOString(),
+      nickname: state.nickname,
+      settingsAt: state.settingsAt,
       settings: state.settings,
       cards: state.cards,
       days: state.days,
@@ -1123,6 +1221,7 @@
     const ok = await confirmBox({ title: '匯入進度？', body, ok: '匯入並取代' });
     if (!ok) return;
     next.settings.onboarded = true;
+    if (!next.nickname) next.nickname = state.nickname;
     state = next;
     save();
     session = null;
@@ -1166,7 +1265,7 @@
         </div>
         <div class="panel stack">
           <h2>隱私</h2>
-          <p>學習進度只儲存在本機瀏覽器（localStorage），不會上傳到任何伺服器，也不使用追蹤或分析工具。</p>
+          <p>學習進度儲存在本機瀏覽器（localStorage）。只有在你主動用 Google 登入雲端同步時，才會把進度（暱稱、設定、學習紀錄）存到你自己的 Firebase 雲端資料，其他人無法讀取。不使用追蹤或分析工具。</p>
         </div>
         <div class="panel stack">
           <h2>複習演算法</h2>
@@ -1196,13 +1295,13 @@
     undo: () => undo(),
     extra: () => { buildSession(10); location.hash === '#/study' ? renderStudy() : (location.hash = '#/study'); },
 
-    'ob-goal': el => { state.settings.dailyNew = Number(el.dataset.n); save(); renderOnboarding(); },
+    'ob-goal': el => { state.settings.dailyNew = Number(el.dataset.n); save(true); renderOnboarding(); },
     'ob-cat': el => { if (toggleCat(el.dataset.cat)) renderOnboarding(); },
     'ob-back': () => { obStep = Math.max(0, obStep - 1); renderOnboarding(); },
     'ob-next': () => {
       if (obStep < 2) { obStep++; renderOnboarding(); return; }
       state.settings.onboarded = true;
-      save();
+      save(true);
       session = null;
       location.hash = '#/';
       render();
@@ -1227,13 +1326,25 @@
 
     goal: el => {
       state.settings.dailyNew = clamp(state.settings.dailyNew + Number(el.dataset.d), 5, 100);
-      save();
+      save(true);
       session = null;
       $('#goalOut').textContent = state.settings.dailyNew;
     },
     'set-cat': el => { if (toggleCat(el.dataset.cat)) renderSettings(); },
-    theme: el => { state.settings.theme = el.dataset.v; save(); applyTheme(); renderSettings(); },
-    autospeak: el => { state.settings.autoSpeak = el.checked; save(); },
+    theme: el => { state.settings.theme = el.dataset.v; save(true); applyTheme(); renderSettings(); },
+    autospeak: el => { state.settings.autoSpeak = el.checked; save(true); },
+    'nick-save': () => {
+      const v = cleanNick(($('#nickInput') || {}).value);
+      if (!v) { toast('請輸入暱稱'); return; }
+      state.nickname = v;
+      save(true);
+      toast(`嗨，${v}！`);
+      render();
+    },
+    'nick-edit': () => editNickname(),
+    'sync-in': () => window.__sync && window.__sync.signIn(),
+    'sync-out': () => window.__sync && window.__sync.signOut(),
+    'sync-now': () => window.__sync && window.__sync.syncNow(),
     export: () => exportProgress(),
     import: () => $('#importFile').click(),
     reset: () => resetProgress(),
@@ -1251,7 +1362,7 @@
 
   $('#themeBtn').addEventListener('click', () => {
     state.settings.theme = effectiveTheme() === 'dark' ? 'light' : 'dark';
-    save();
+    save(true);
     applyTheme();
     if (route() === 'settings' && state.settings.onboarded) renderSettings();
   });
@@ -1305,6 +1416,27 @@
     get session() { return session; },
     schedule,
     dueIds,
+    normalize: normalizeState,
+    exportSyncState() {
+      return { nickname: state.nickname, settings: { ...state.settings }, settingsAt: state.settingsAt, cards: state.cards, days: state.days };
+    },
+    applySyncState(m) {
+      const next = normalizeState({ ...state, ...m });
+      const before = JSON.stringify(state);
+      if (!m.nickname && state.nickname) next.nickname = state.nickname;
+      if (state.settings.onboarded || (m.settings && m.settings.onboarded)) next.settings.onboarded = true;
+      state = next;
+      if (JSON.stringify(state) === before) return;
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+      applyTheme();
+      const r = route();
+      if (r !== 'study' && r !== 'quiz') { session = null; quiz = null; render(); }
+    },
+    onSyncChange() {
+      if (!DATA.length) return;
+      const panel = $('#syncPanel');
+      if (panel && route() === 'settings') renderSettings();
+    },
   };
 
   /* ---------- 啟動 ---------- */
