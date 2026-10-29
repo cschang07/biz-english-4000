@@ -454,7 +454,6 @@
   function render() {
     if (!DATA.length && !loadError) return;
     if (loadError) return renderError();
-    if (!state.nickname) return renderNickname();
     if (!state.settings.onboarded) return renderOnboarding();
     const r = route();
     const map = { home: renderHome, study: renderStudy, quiz: renderQuiz, browse: renderBrowse, settings: renderSettings, about: renderAbout };
@@ -466,21 +465,6 @@
   }
 
   /* ---------- 暱稱 ---------- */
-  function renderNickname() {
-    paint(`
-      <div class="onboard">
-        <div class="welcome-art" aria-hidden="true"><div class="c c1 en">Hi!</div><div class="c c2 en">hello</div><div class="c c3 en">こんにちは</div></div>
-        <h1>嗨！該怎麼稱呼你？</h1>
-        <p class="lead">取一個暱稱吧，之後會用它跟你打招呼。隨時可以在「設定」修改。</p>
-        <div class="body">
-          <input id="nickInput" class="nick-input" type="text" maxlength="20" autocomplete="nickname" placeholder="例如：小美" value="${esc(state.nickname)}" aria-label="暱稱">
-        </div>
-        <div class="foot"><button class="btn primary" type="button" data-act="nick-save">就叫這個</button></div>
-      </div>`, '', true);
-    const inp = $('#nickInput');
-    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); actions['nick-save'](); } });
-    setTimeout(() => inp.focus(), 50);
-  }
   function editNickname() {
     const root = $('#modal');
     root.innerHTML = `
@@ -544,12 +528,13 @@
   /* ---------- 引導 ---------- */
   const OB_KEY = 'biz4000.obStep';
   const googleStepOn = () => { const sy = window.__sync; return !!sy && sy.status !== 'unconfigured'; };
-  const obSteps = () => (googleStepOn() ? ['google'] : []).concat(['welcome', 'goal', 'cats']);
+  const obSteps = () => ['nick'].concat(googleStepOn() ? ['google'] : [], ['welcome', 'goal', 'cats']);
   let obName = null;
   function obCurrent() {
     const list = obSteps();
     if (!obName) { try { obName = localStorage.getItem(OB_KEY); } catch (e) {} }
-    if (!list.includes(obName)) obName = list[0];
+    if (!list.includes(obName)) obName = state.nickname ? list[1] : list[0];
+    if (!state.nickname) obName = 'nick';
     return obName;
   }
   function obGo(name) {
@@ -591,7 +576,15 @@
     const idx = list.indexOf(cur);
     const steps = `<div class="steps">${list.map((n, i) => `<i class="${i <= idx ? 'on' : ''}"></i>`).join('')}</div>`;
     let body = '';
-    if (cur === 'google') {
+    if (cur === 'nick') {
+      body = `
+        <div class="welcome-art" aria-hidden="true"><div class="c c1 en">Hi!</div><div class="c c2 en">hello</div><div class="c c3 en">こんにちは</div></div>
+        <h1>嗨！該怎麼稱呼你？</h1>
+        <p class="lead">取一個暱稱吧，之後會用它跟你打招呼。隨時可以在「設定」修改。</p>
+        <div class="body">
+          <input id="nickInput" class="nick-input" type="text" maxlength="20" autocomplete="nickname" placeholder="例如：小美" value="${esc(state.nickname)}" aria-label="暱稱">
+        </div>`;
+    } else if (cur === 'google') {
       body = googleStepBody();
     } else if (cur === 'welcome') {
       body = `
@@ -628,12 +621,18 @@
     const foot = cur === 'google' && !signed ? `
       <div class="foot col">
         <button class="btn ghost block ob-skip" type="button" data-act="ob-skip">先略過，之後在設定登入</button>
+        <button class="btn ghost block" type="button" data-act="ob-back">上一頁</button>
       </div>` : `
       <div class="foot">
-        ${idx > 0 ? '<button class="btn ghost" type="button" data-act="ob-back">上一步</button>' : ''}
+        ${idx > 0 ? '<button class="btn ghost" type="button" data-act="ob-back">上一頁</button>' : ''}
         <button class="btn primary" type="button" data-act="ob-next">${last ? '開始學習' : '下一步'}</button>
       </div>`;
     paint(`<div class="onboard">${steps}${body}${foot}</div>`, '', true);
+    if (cur === 'nick') {
+      const inp = $('#nickInput');
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); actions['ob-next'](); } });
+      setTimeout(() => inp.focus(), 50);
+    }
   }
   function catPicker(act) {
     const sel = new Set(state.settings.cats);
@@ -1351,6 +1350,13 @@
     'ob-back': () => obMove(-1),
     'ob-skip': () => obMove(1),
     'ob-next': () => {
+      if (obCurrent() === 'nick') {
+        const v = cleanNick(($('#nickInput') || {}).value);
+        if (!v) { toast('請輸入暱稱'); return; }
+        if (v !== state.nickname) { state.nickname = v; save(true); }
+        obMove(1);
+        return;
+      }
       const list = obSteps();
       if (obCurrent() !== list[list.length - 1]) { obMove(1); return; }
       obClear();
@@ -1387,14 +1393,6 @@
     'set-cat': el => { if (toggleCat(el.dataset.cat)) renderSettings(); },
     theme: el => { state.settings.theme = el.dataset.v; save(true); applyTheme(); renderSettings(); },
     autospeak: el => { state.settings.autoSpeak = el.checked; save(true); },
-    'nick-save': () => {
-      const v = cleanNick(($('#nickInput') || {}).value);
-      if (!v) { toast('請輸入暱稱'); return; }
-      state.nickname = v;
-      save(true);
-      toast(`嗨，${v}！`);
-      render();
-    },
     'nick-edit': () => editNickname(),
     'sync-in': () => window.__sync && window.__sync.signIn(),
     'sync-out': () => window.__sync && window.__sync.signOut(),
@@ -1491,7 +1489,7 @@
     beforeAuthRedirect() { try { localStorage.setItem(OB_KEY, obCurrent()); } catch (e) {} },
     onSyncChange() {
       if (!DATA.length) return;
-      if (state.nickname && !state.settings.onboarded && !loadError) { if (obCurrent() === 'google' || !googleStepOn()) renderOnboarding(); return; }
+      if (!state.settings.onboarded && !loadError) { if (obCurrent() === 'google' || !googleStepOn()) renderOnboarding(); return; }
       const panel = $('#syncPanel');
       if (panel && route() === 'settings') renderSettings();
     },
