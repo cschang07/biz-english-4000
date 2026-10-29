@@ -1,6 +1,6 @@
 /* 離線快取：一律先走網路（確保拿到最新版），失敗才用快取。
    路徑相對於 sw.js 本身，才能在 /biz-english-4000/ 子路徑下運作。 */
-const CACHE = 'biz4000-v4';
+const CACHE = 'biz4000-v5';
 const CRITICAL = ['./', './index.html', './app.js', './style.css', './data.json', './manifest.webmanifest', './sync.js', './merge.js', './firebase-config.js'];
 const OPTIONAL = ['./icon.svg', './icon-180.png', './icon-192.png', './icon-512.png'];
 
