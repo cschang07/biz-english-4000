@@ -22,16 +22,16 @@
   const MAX_EF = 4;
   const MAX_IV = 36500;
 
-  // SM-2 品質分數：忘記 < 3 視為答錯
+  // SM-2 品質分數：不認得 < 3 視為答錯
   const GRADES = [
-    { key: 'again', zh: '忘記', q: 1 },
-    { key: 'hard',  zh: '困難', q: 3 },
-    { key: 'good',  zh: '良好', q: 4 },
-    { key: 'easy',  zh: '簡單', q: 5 },
+    { key: 'again', zh: '不認得', q: 1 },
+    { key: 'hard',  zh: '有點難', q: 3 },
+    { key: 'good',  zh: '認得', q: 4 },
+    { key: 'easy',  zh: '太簡單', q: 5 },
   ];
   const GRADE = Object.fromEntries(GRADES.map(g => [g.key, g]));
   const MASTERED_DAYS = 21;
-  const DRILL_GAP = 4; // 忘記的字在同一輪中隔幾張再出現
+  const DRILL_GAP = 4; // 不認得的字在同一輪中隔幾張再出現
 
   const DEFAULT_SETTINGS = {
     onboarded: false,
@@ -216,7 +216,7 @@
 
   /* ---------- SM-2 排程 ---------- */
   // 原版 SM-2：答錯（q<3）重設次數、不改易度；答對依 EF 拉長間隔。
-  // 微調：「困難」間隔成長較慢、「簡單」較快，讓四個按鈕有實際差別。
+  // 微調：「有點難」間隔成長較慢、「太簡單」較快，讓四個按鈕有實際差別。
   function schedule(prev, gradeKey, day = today()) {
     const g = GRADE[gradeKey];
     if (!g || !isValidYMD(day)) throw new Error('schedule: 評分或日期無效');
@@ -820,9 +820,9 @@
     const prev = state.cards[item.id];
     return `<div class="grades">${GRADES.map(g => {
       let label;
-      if (g.key === 'again') label = '稍後';
-      else if (item.drill) label = '通過';
-      else label = fmtIv(schedule(prev, g.key).iv);
+      if (g.key === 'again') label = '等一下再考';
+      else if (item.drill) label = '這輪過關';
+      else label = `${fmtIv(schedule(prev, g.key).iv)}後複習`;
       return `<button class="grade ${g.key}" type="button" data-act="grade" data-g="${g.key}">${g.zh}<small>${label}</small></button>`;
     }).join('')}</div>`;
   }
@@ -901,7 +901,7 @@
         <div class="summary">
           <div><b>${s.stats.new}</b><span>新字</span></div>
           <div><b>${s.stats.rev}</b><span>複習</span></div>
-          <div><b>${s.stats.again}</b><span>忘記</span></div>
+          <div><b>${s.stats.again}</b><span>不認得</span></div>
         </div>`}
         <div class="stack" style="margin-top:${empty ? 26 : 0}px">
           ${moreNew ? '<button class="btn primary block" type="button" data-act="extra">再多學 10 個新字</button>' : ''}
@@ -1319,7 +1319,7 @@
         </div>
         <div class="panel stack">
           <h2>複習演算法</h2>
-          <p>採用 SM-2 間隔重複演算法（公開的通用方法），並依「困難／簡單」微調間隔。間隔達 ${MASTERED_DAYS} 天以上的字視為「熟練」。</p>
+          <p>採用 SM-2 間隔重複演算法（公開的通用方法），並依「有點難／太簡單」微調間隔。間隔達 ${MASTERED_DAYS} 天以上的字視為「熟練」。</p>
         </div>
         <a class="btn ghost block" href="#/" style="margin-top:16px">回首頁</a>
       </div>`, 'settings');
