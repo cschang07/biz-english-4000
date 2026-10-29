@@ -51,10 +51,12 @@ function newerCard(a, b) {
   return String(a.due || '') >= String(b.due || '') ? a : b;
 }
 
-export function mergeStates(local, remote) {
+// opts.preferRemoteSettings：本機還在首次引導（尚未完成），本機的暱稱／設定只是預設值或剛輸入的，
+// 不能憑較新的 settingsAt 蓋掉雲端既有答案，也不能讓本機 onboarded:false 蓋掉雲端的 true。
+export function mergeStates(local, remote, opts = {}) {
   if (!remote) return local;
   const L = local || {};
-  const remoteWins = (Number(remote.settingsAt) || 0) > (Number(L.settingsAt) || 0);
+  const remoteWins = !!opts.preferRemoteSettings || (Number(remote.settingsAt) || 0) > (Number(L.settingsAt) || 0);
   const out = {
     ...L,
     nickname: remoteWins ? (remote.nickname || L.nickname || '') : (L.nickname || remote.nickname || ''),
@@ -63,6 +65,7 @@ export function mergeStates(local, remote) {
     cards: {},
     days: {},
   };
+  if ((L.settings && L.settings.onboarded) || (remote.settings && remote.settings.onboarded)) out.settings.onboarded = true;
   const lc = L.cards || {}, rc = remote.cards || {};
   for (const id of new Set([...Object.keys(lc), ...Object.keys(rc)])) out.cards[id] = newerCard(lc[id], rc[id]);
   // 每日統計（連續天數用）：同一天取較大值

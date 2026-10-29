@@ -4,6 +4,10 @@ p.on('console',m=>m.type()==='error'&&errs.push(m.text())); p.on('pageerror',e=>
 const U='http://localhost:8765/'; const s=n=>p.screenshot({path:`shots/${n}.png`});
 await p.goto(U); await p.waitForTimeout(800); await s('00-nickname');
 await p.fill('#nickInput','小美'); await p.click('[data-act="nick-save"]'); await p.waitForTimeout(300); await s('01-onboarding');
+console.log('google step visible', await p.locator('[data-act="ob-skip"]').count(), await p.locator('.onboard h1').innerText());
+await p.evaluate(()=>localStorage.getItem('biz4000.obStep')); await s('01a-google-step');
+await p.reload(); await p.waitForTimeout(800); console.log('resumed after reload:', await p.locator('.onboard h1').innerText());
+await p.click('[data-act="ob-skip"]'); await p.waitForTimeout(300); console.log('after skip step:', await p.evaluate(()=>localStorage.getItem('biz4000.obStep')));
 for(let i=0;i<3;i++){const n=p.locator('[data-act="ob-next"]'); if(await n.count()){await n.click(); await p.waitForTimeout(300);}}
 await s('02-home'); console.log('greet', await p.locator('.greet h1').innerText());
 await p.goto(U+'#/study'); await p.waitForTimeout(500); await s('03-card-front');
