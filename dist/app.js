@@ -542,12 +542,58 @@
   }
 
   /* ---------- 引導 ---------- */
-  let obStep = 0;
+  const OB_KEY = 'biz4000.obStep';
+  const googleStepOn = () => { const sy = window.__sync; return !!sy && sy.status !== 'unconfigured'; };
+  const obSteps = () => (googleStepOn() ? ['google'] : []).concat(['welcome', 'goal', 'cats']);
+  let obName = null;
+  function obCurrent() {
+    const list = obSteps();
+    if (!obName) { try { obName = localStorage.getItem(OB_KEY); } catch (e) {} }
+    if (!list.includes(obName)) obName = list[0];
+    return obName;
+  }
+  function obGo(name) {
+    obName = name;
+    try { localStorage.setItem(OB_KEY, name); } catch (e) {}
+    renderOnboarding();
+  }
+  function obClear() {
+    obName = null;
+    try { localStorage.removeItem(OB_KEY); } catch (e) {}
+  }
+  function obMove(d) {
+    const list = obSteps();
+    const i = list.indexOf(obCurrent()) + d;
+    if (i >= 0 && i < list.length) obGo(list[i]);
+  }
+  function googleStepBody() {
+    const sy = window.__sync;
+    let main;
+    if (sy.status === 'signedIn') {
+      main = `<div class="panel ob-google-ok"><div class="label en">${esc(sy.email)}</div><div class="desc">${sy.busy ? '同步中…' : '已登入，進度會自動備份到雲端。'}</div></div>`;
+    } else if (sy.status === 'loading' || sy.signingIn) {
+      main = `<button class="btn primary block" type="button" disabled>${sy.signingIn ? '登入中…' : '連線中…'}</button>`;
+    } else if (sy.status === 'error') {
+      main = `<p class="muted">${esc(sy.message)}</p>`;
+    } else {
+      main = `<button class="btn primary block" type="button" data-act="sync-in">用 Google 登入</button>`;
+    }
+    const msg = sy.status !== 'error' && sy.message ? `<p class="muted ob-msg" role="alert">${esc(sy.message)}</p>` : '';
+    return `
+      <h1>用 Google 登入，<br>雲端同步進度</h1>
+      <p class="lead">登入後進度會自動備份，換手機或清除瀏覽器資料也不會不見。已經有帳號進度的話，會直接接著背。</p>
+      <div class="body">${main}${msg}</div>`;
+  }
   function renderOnboarding() {
     const s = state.settings;
-    const steps = `<div class="steps">${[0, 1, 2].map(i => `<i class="${i <= obStep ? 'on' : ''}"></i>`).join('')}</div>`;
+    const cur = obCurrent();
+    const list = obSteps();
+    const idx = list.indexOf(cur);
+    const steps = `<div class="steps">${list.map((n, i) => `<i class="${i <= idx ? 'on' : ''}"></i>`).join('')}</div>`;
     let body = '';
-    if (obStep === 0) {
+    if (cur === 'google') {
+      body = googleStepBody();
+    } else if (cur === 'welcome') {
       body = `
         <div class="welcome-art" aria-hidden="true">
           <div class="c c1 en">5G</div><div class="c c2 en">agenda</div><div class="c c3 en">roaming</div>
@@ -559,7 +605,7 @@
           <div class="feature"><div class="ic">🧠</div><div><b>間隔重複複習</b><span>依你的記憶狀況安排複習時間，記得越牢間隔越長。</span></div></div>
           <div class="feature"><div class="ic">🔊</div><div><b>美式英語發音</b><span>點一下就朗讀單字與例句，使用裝置內建語音。</span></div></div>
         </div>`;
-    } else if (obStep === 1) {
+    } else if (cur === 'goal') {
       const opts = [5, 10, 20, 30, 50];
       const label = { 5: '輕鬆', 10: '穩定', 20: '推薦', 30: '積極', 50: '衝刺' };
       body = `
@@ -577,10 +623,15 @@
         <p class="lead">建議先從「通訊電信」開始，熟悉後再加入其他分類。</p>
         <div class="body">${catPicker('ob-cat')}</div>`;
     }
-    const foot = `
+    const last = idx === list.length - 1;
+    const signed = cur === 'google' && window.__sync.status === 'signedIn';
+    const foot = cur === 'google' && !signed ? `
+      <div class="foot col">
+        <button class="btn ghost block ob-skip" type="button" data-act="ob-skip">先略過，之後在設定登入</button>
+      </div>` : `
       <div class="foot">
-        ${obStep > 0 ? '<button class="btn ghost" type="button" data-act="ob-back">上一步</button>' : ''}
-        <button class="btn primary" type="button" data-act="ob-next">${obStep < 2 ? '下一步' : '開始學習'}</button>
+        ${idx > 0 ? '<button class="btn ghost" type="button" data-act="ob-back">上一步</button>' : ''}
+        <button class="btn primary" type="button" data-act="ob-next">${last ? '開始學習' : '下一步'}</button>
       </div>`;
     paint(`<div class="onboard">${steps}${body}${foot}</div>`, '', true);
   }
@@ -1238,7 +1289,7 @@
     save();
     session = null;
     quiz = null;
-    obStep = 0;
+    obClear();
     applyTheme();
     location.hash = '#/';
     render();
@@ -1297,9 +1348,12 @@
 
     'ob-goal': el => { state.settings.dailyNew = Number(el.dataset.n); save(true); renderOnboarding(); },
     'ob-cat': el => { if (toggleCat(el.dataset.cat)) renderOnboarding(); },
-    'ob-back': () => { obStep = Math.max(0, obStep - 1); renderOnboarding(); },
+    'ob-back': () => obMove(-1),
+    'ob-skip': () => obMove(1),
     'ob-next': () => {
-      if (obStep < 2) { obStep++; renderOnboarding(); return; }
+      const list = obSteps();
+      if (obCurrent() !== list[list.length - 1]) { obMove(1); return; }
+      obClear();
       state.settings.onboarded = true;
       save(true);
       session = null;
@@ -1425,15 +1479,19 @@
       const before = JSON.stringify(state);
       if (!m.nickname && state.nickname) next.nickname = state.nickname;
       if (state.settings.onboarded || (m.settings && m.settings.onboarded)) next.settings.onboarded = true;
+      const wasOnboarding = !state.settings.onboarded;
       state = next;
+      if (wasOnboarding && state.settings.onboarded) { obClear(); toast('歡迎回來，已接上雲端的學習進度'); }
       if (JSON.stringify(state) === before) return;
       try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
       applyTheme();
       const r = route();
       if (r !== 'study' && r !== 'quiz') { session = null; quiz = null; render(); }
     },
+    beforeAuthRedirect() { try { localStorage.setItem(OB_KEY, obCurrent()); } catch (e) {} },
     onSyncChange() {
       if (!DATA.length) return;
+      if (state.nickname && !state.settings.onboarded && !loadError) { if (obCurrent() === 'google' || !googleStepOn()) renderOnboarding(); return; }
       const panel = $('#syncPanel');
       if (panel && route() === 'settings') renderSettings();
     },

@@ -21,6 +21,13 @@ assert.ok(m.days['2026-10-27']);
 m = mergeStates({ ...local, settingsAt: 50 }, remote);
 assert.equal(m.nickname, '阿美'); assert.equal(m.settings.theme, 'light'); assert.equal(m.settingsAt, 100);
 assert.equal(mergeStates(local, null), local);
+// 新裝置首次引導：本機設定較新但尚未完成引導時，雲端的暱稱／每日目標／onboarded 優先
+const fresh = { nickname: '新', settingsAt: 999, settings: { onboarded: false, dailyNew: 20 }, cards: {}, days: {} };
+const cloudDone = fromCloud(toCloud({ nickname: '阿美', settingsAt: 100, settings: { onboarded: true, dailyNew: 30 }, cards: { 'tel-0001': c('2026-10-27') }, days: {} }));
+m = mergeStates(fresh, cloudDone, { preferRemoteSettings: true });
+assert.equal(m.nickname, '阿美'); assert.equal(m.settings.dailyNew, 30); assert.equal(m.settings.onboarded, true); assert.ok(m.cards['tel-0001']);
+m = mergeStates(fresh, cloudDone);   // 沒有旗標時舊行為：本機較新，但 onboarded 仍不會被 false 蓋掉
+assert.equal(m.settings.dailyNew, 20); assert.equal(m.settings.onboarded, true);
 // round-trip & size
 const big = { cards: {}, days: {}, settings: {} };
 for (let i = 0; i < 4100; i++) big.cards['tel-' + String(i).padStart(4, '0')] = c('2026-10-28');
